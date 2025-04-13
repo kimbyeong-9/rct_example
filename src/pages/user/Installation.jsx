@@ -114,12 +114,31 @@ const ProductImage = styled.div`
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  position: relative;
 
   img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    opacity: 1;
+    transition: opacity 0.3s ease;
   }
+`;
+
+const DefaultImage = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: #e9ecef;
+  color: #666;
+  font-size: 14px;
+  text-align: center;
 `;
 
 const ProductInfo = styled.div`
@@ -199,15 +218,22 @@ const Installation = () => {
         if (adminCategory && adminCategory.posts) {
           return {
             ...category,
-            subCategories: adminCategory.posts.map(post => ({
-              id: `post-${post.id}`,
-              name: post.title,
-              description: post.content,
-              image: post.images && post.images.length > 0 
-                ? (post.images[0].url || post.images[0].base64) 
-                : `/images/default-image.jpg`,
-              post: post
-            }))
+            subCategories: adminCategory.posts.map(post => {
+              // 이미지 URL 사전 검증
+              let imageUrl = '/images/default-image.jpg';
+              if (post.images && post.images.length > 0 && (post.images[0].url || post.images[0].base64)) {
+                imageUrl = post.images[0].url || post.images[0].base64;
+              }
+              
+              return {
+                id: `post-${post.id}`,
+                name: post.title,
+                description: post.content,
+                image: imageUrl,
+                hasValidImage: post.images && post.images.length > 0 && (post.images[0].url || post.images[0].base64),
+                post: post
+              };
+            })
           };
         }
         return {...category, subCategories: []};
@@ -271,13 +297,23 @@ const Installation = () => {
                       to={`/installation/${selectedCategory.id}/${subcategory.id}`}
                     >
                       <ProductImage>
-                        <img 
-                          src={subcategory.image} 
-                          alt={subcategory.name} 
-                          onError={(e) => {
-                            e.target.src = '/images/default-image.jpg';
-                          }}
-                        />
+                        {subcategory.hasValidImage ? (
+                          <img 
+                            src={subcategory.image} 
+                            alt={subcategory.name} 
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.parentNode.querySelector('.default-image-fallback').style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <DefaultImage 
+                          className="default-image-fallback"
+                          style={{display: subcategory.hasValidImage ? 'none' : 'flex'}}
+                        >
+                          <span>🖼️</span>
+                          <p>이미지 준비 중</p>
+                        </DefaultImage>
                       </ProductImage>
                       <ProductInfo>
                         <ProductName>{subcategory.name}</ProductName>

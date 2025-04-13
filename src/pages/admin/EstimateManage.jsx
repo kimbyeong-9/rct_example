@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { Link } from 'react-router-dom';
-import useFaqQuestions from '../../services/QuestionsService';
+import useEstimates from '../../services/EstimateService';
 
 const Container = styled.div`
   padding: 100px 20px 20px;
@@ -102,7 +102,7 @@ const PageTitle = styled.h1`
   margin-top: 0;
 `;
 
-const QuestionsTable = styled.table`
+const EstimatesTable = styled.table`
   width: 100%;
   border-collapse: collapse;
   margin-bottom: 20px;
@@ -143,16 +143,16 @@ const TableCell = styled.td`
   }
 `;
 
-const CategoryBadge = styled.span`
+const StatusBadge = styled.span`
   display: inline-block;
   padding: 5px 10px;
   border-radius: 20px;
   font-size: 12px;
   font-weight: 500;
   background-color: ${props => 
-    props.category === '설치' ? '#4A90A7' : 
-    props.category === '유지보수' ? '#28A745' : 
-    props.category === '제품' ? '#6C757D' : '#FFC107'};
+    props.status === '대기중' ? '#ffc107' : 
+    props.status === '처리중' ? '#17a2b8' : 
+    props.status === '완료' ? '#28a745' : '#6c757d'};
   color: white;
 `;
 
@@ -187,24 +187,6 @@ const NoResults = styled.div`
   padding: 40px 0;
   color: #666;
   font-size: 18px;
-`;
-
-const AddButton = styled.button`
-  padding: 10px 20px;
-  background-color: #28a745;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  font-size: 16px;
-  margin-top: 20px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  
-  &:hover {
-    background-color: #218838;
-  }
 `;
 
 // 모달 관련 스타일 컴포넌트
@@ -350,165 +332,158 @@ const ConfirmText = styled.p`
   color: #333;
 `;
 
-const QuestionsManage = () => {
-  const { 
-    questions, 
-    categories, 
-    addQuestion, 
-    updateQuestion, 
-    deleteQuestion 
-  } = useFaqQuestions();
+const EstimateDetailItem = styled.div`
+  margin-bottom: 15px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 15px;
   
-  const [filteredQuestions, setFilteredQuestions] = useState([]);
+  &:last-child {
+    border-bottom: none;
+  }
+`;
+
+const EstimateDetailLabel = styled.h4`
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+  font-weight: 600;
+`;
+
+const EstimateDetailValue = styled.p`
+  margin: 5px 0 0;
+  color: #333;
+  font-size: 16px;
+`;
+
+const MODAL_TYPES = {
+  VIEW: 'view',
+  REPLY: 'reply',
+  DELETE: 'delete',
+  DELETE_COMPLETE: 'delete_complete'
+};
+
+const EstimateManage = () => {
+  const { 
+    estimates, 
+    updateEstimate, 
+    deleteEstimate 
+  } = useEstimates();
+  
+  const [filteredEstimates, setFilteredEstimates] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [activeCategory, setActiveCategory] = useState('all');
+  const [activeStatus, setActiveStatus] = useState('all');
   const [showModal, setShowModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [selectedQuestion, setSelectedQuestion] = useState(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [questionToDelete, setQuestionToDelete] = useState(null);
-  const [modalType, setModalType] = useState(null); // 'DELETE', 'DELETE_COMPLETE' 모달 상태 관리
+  const [selectedEstimate, setSelectedEstimate] = useState(null);
+  const [modalType, setModalType] = useState(MODAL_TYPES.VIEW);
+  const [estimateToDelete, setEstimateToDelete] = useState(null);
+  
+  // 답변 상태
+  const [replyStatus, setReplyStatus] = useState('처리중');
+  const [replyContent, setReplyContent] = useState('');
   
   // 페이지당 아이템 수
   const itemsPerPage = 10;
+
+  // 상태 필터 옵션
+  const statusOptions = [
+    { id: 'all', name: '전체' },
+    { id: '대기중', name: '대기중' },
+    { id: '처리중', name: '처리중' },
+    { id: '완료', name: '완료' }
+  ];
   
-  // 폼 상태
-  const [formState, setFormState] = useState({
-    question: '',
-    answer: '',
-    category: '설치'
-  });
-  
-  // 필터링 및 정렬
+  // 페이지 진입 시 스크롤 위치를 상단으로 초기화
   useEffect(() => {
-    let filtered = [...questions];
+    window.scrollTo(0, 0);
+  }, []);
+  
+  // 견적문의 필터링 및 정렬
+  useEffect(() => {
+    let filtered = [...estimates];
     
-    // 카테고리로 필터링
-    if (activeCategory !== 'all') {
-      filtered = filtered.filter(q => q.category === activeCategory);
+    // 상태로 필터링
+    if (activeStatus !== 'all') {
+      filtered = filtered.filter(e => e.status === activeStatus);
     }
     
     // 검색어로 필터링
     if (searchTerm) {
-      filtered = filtered.filter(q => 
-        q.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        q.answer.toLowerCase().includes(searchTerm.toLowerCase())
+      filtered = filtered.filter(e => 
+        e.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        e.phone.includes(searchTerm) ||
+        e.service.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        e.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        e.details.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
     
-    // 카테고리별 정렬 후 order별 정렬
-    filtered.sort((a, b) => {
-      if (a.category !== b.category) {
-        return a.category.localeCompare(b.category);
-      }
-      return a.order - b.order;
-    });
+    // 날짜별 내림차순 정렬
+    filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
     
-    setFilteredQuestions(filtered);
+    setFilteredEstimates(filtered);
     
     // 페이지 조정
     const maxPage = Math.ceil(filtered.length / itemsPerPage);
     if (currentPage > maxPage && maxPage > 0) {
       setCurrentPage(maxPage);
     }
-  }, [questions, searchTerm, activeCategory, currentPage]);
+  }, [estimates, searchTerm, activeStatus, currentPage]);
   
-  // 현재 페이지의 질문
-  const currentQuestions = filteredQuestions.slice(
+  // 현재 페이지의 견적문의
+  const currentEstimates = filteredEstimates.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
   
   // 총 페이지 수
-  const totalPages = Math.ceil(filteredQuestions.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredEstimates.length / itemsPerPage);
   
-  // 질문 추가 모달 열기
-  const handleAddClick = () => {
-    setIsEditing(false);
-    setFormState({
-      question: '',
-      answer: '',
-      category: '설치'
-    });
+  // 견적문의 클릭 핸들러
+  const handleEstimateClick = (estimate) => {
+    setSelectedEstimate(estimate);
+    setReplyStatus(estimate.status);
+    setReplyContent(estimate.reply);
+    setModalType(MODAL_TYPES.VIEW);
     setShowModal(true);
   };
   
-  // 질문 수정 모달 열기
-  const handleEditClick = (question, e) => {
+  // 답변 모달 열기
+  const handleReplyClick = (estimate, e) => {
     e.stopPropagation();
-    setIsEditing(true);
-    setSelectedQuestion(question);
-    setFormState({
-      question: question.question,
-      answer: question.answer,
-      category: question.category
-    });
+    setSelectedEstimate(estimate);
+    setReplyStatus(estimate.status);
+    setReplyContent(estimate.reply);
+    setModalType(MODAL_TYPES.REPLY);
     setShowModal(true);
   };
   
-  // 질문 삭제 확인 모달 열기
-  const handleDeleteClick = (question, e) => {
+  // 삭제 확인 모달 열기
+  const handleDeleteClick = (estimate, e) => {
     e.stopPropagation();
-    setQuestionToDelete(question);
+    setEstimateToDelete(estimate);
     setShowConfirmModal(true);
-    setModalType('DELETE');
   };
   
-  // 질문 삭제 실행
+  // 견적문의 삭제 실행
   const confirmDelete = () => {
-    // 삭제 로직 구현
-    const updatedQuestions = questions.filter(
-      (q) => q.id !== questionToDelete.id
-    );
-    deleteQuestion(questionToDelete.id);
-    
-    // 삭제 확인 모달 닫기
-    setShowConfirmModal(false);
-    
-    // 삭제 완료 모달 표시
-    setModalType('DELETE_COMPLETE');
-    
-    // 1.5초 후 삭제 완료 모달 닫기
-    setTimeout(() => {
-      setModalType(null);
-    }, 1500);
-  };
-  
-  // 질문 상세 모달 열기
-  const handleQuestionClick = (question) => {
-    setSelectedQuestion(question);
-    setFormState({
-      question: question.question,
-      answer: question.answer,
-      category: question.category
-    });
-    setIsEditing(false); // 읽기 모드로 설정
-    setShowModal(true);
-  };
-  
-  // 폼 입력 처리
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormState({
-      ...formState,
-      [name]: value
-    });
-  };
-  
-  // 폼 제출 처리
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    
-    if (isEditing && selectedQuestion) {
-      // 수정
-      updateQuestion(selectedQuestion.id, formState);
-    } else {
-      // 추가
-      addQuestion(formState);
+    if (estimateToDelete) {
+      deleteEstimate(estimateToDelete.id);
+      setShowConfirmModal(false);
+      setEstimateToDelete(null);
     }
-    
-    setShowModal(false);
+  };
+  
+  // 답변 저장
+  const saveReply = () => {
+    if (selectedEstimate) {
+      updateEstimate(selectedEstimate.id, {
+        status: replyStatus,
+        reply: replyContent
+      });
+      setShowModal(false);
+    }
   };
   
   // 검색 처리
@@ -528,36 +503,40 @@ const QuestionsManage = () => {
     }
   };
   
-  // 카테고리 필터 변경
-  const handleCategoryChange = (categoryId) => {
-    setActiveCategory(categoryId);
+  // 상태 필터 변경
+  const handleStatusChange = (statusId) => {
+    setActiveStatus(statusId);
     setCurrentPage(1);
   };
   
   // 모달 닫기
   const handleCloseModal = () => {
     setShowModal(false);
-    setSelectedQuestion(null);
+    setSelectedEstimate(null);
   };
   
-  // 페이지 진입 시 스크롤 위치를 상단으로 초기화
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
+  // 날짜 포맷 함수
+  const formatDate = (dateStr) => {
+    const date = new Date(dateStr);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
   
   return (
     <Container>
-      <PageTitle>자주 묻는 질문 관리</PageTitle>
+      <PageTitle>견적문의 관리</PageTitle>
       
       <Header>
         <FilterSection>
-          {categories.map(category => (
+          {statusOptions.map(status => (
             <FilterButton
-              key={category.id}
-              active={activeCategory === category.id}
-              onClick={() => handleCategoryChange(category.id)}
+              key={status.id}
+              active={activeStatus === status.id}
+              onClick={() => handleStatusChange(status.id)}
             >
-              {category.name}
+              {status.name}
             </FilterButton>
           ))}
         </FilterSection>
@@ -576,42 +555,42 @@ const QuestionsManage = () => {
       </Header>
       
       <ContentSection>
-        <QuestionsTable>
+        <EstimatesTable>
           <TableHeader>
             <tr>
               <TableHeaderCell width="5%">번호</TableHeaderCell>
-              <TableHeaderCell width="15%">카테고리</TableHeaderCell>
-              <TableHeaderCell width="35%">질문</TableHeaderCell>
-              <TableHeaderCell width="30%">답변 미리보기</TableHeaderCell>
-              <TableHeaderCell width="15%">관리</TableHeaderCell>
+              <TableHeaderCell width="10%">이름</TableHeaderCell>
+              <TableHeaderCell width="15%">연락처</TableHeaderCell>
+              <TableHeaderCell width="15%">서비스</TableHeaderCell>
+              <TableHeaderCell width="15%">위치</TableHeaderCell>
+              <TableHeaderCell width="10%">날짜</TableHeaderCell>
+              <TableHeaderCell width="10%">상태</TableHeaderCell>
+              <TableHeaderCell width="20%">관리</TableHeaderCell>
             </tr>
           </TableHeader>
           <TableBody>
-            {currentQuestions.length > 0 ? (
-              currentQuestions.map((question, index) => (
+            {currentEstimates.length > 0 ? (
+              currentEstimates.map((estimate, index) => (
                 <TableRow 
-                  key={question.id} 
-                  onClick={() => handleQuestionClick(question)}
+                  key={estimate.id} 
+                  onClick={() => handleEstimateClick(estimate)}
                 >
-                  <TableCell>{question.id}</TableCell>
+                  <TableCell>{estimate.id}</TableCell>
+                  <TableCell>{estimate.name}</TableCell>
+                  <TableCell>{estimate.phone}</TableCell>
+                  <TableCell>{estimate.service}</TableCell>
+                  <TableCell>{estimate.location}</TableCell>
+                  <TableCell>{formatDate(estimate.date)}</TableCell>
                   <TableCell>
-                    <CategoryBadge category={question.category}>
-                      {question.category}
-                    </CategoryBadge>
-                  </TableCell>
-                  <TableCell className="title" align="left">
-                    {question.question}
-                  </TableCell>
-                  <TableCell align="left">
-                    {question.answer.length > 50 
-                      ? `${question.answer.substring(0, 50)}...` 
-                      : question.answer}
+                    <StatusBadge status={estimate.status}>
+                      {estimate.status}
+                    </StatusBadge>
                   </TableCell>
                   <TableCell>
-                    <Button primary onClick={(e) => handleEditClick(question, e)}>
-                      수정
+                    <Button primary onClick={(e) => handleReplyClick(estimate, e)}>
+                      답변
                     </Button>
-                    <Button danger onClick={(e) => handleDeleteClick(question, e)}>
+                    <Button danger onClick={(e) => handleDeleteClick(estimate, e)}>
                       삭제
                     </Button>
                   </TableCell>
@@ -619,17 +598,17 @@ const QuestionsManage = () => {
               ))
             ) : (
               <tr>
-                <td colSpan="5">
+                <td colSpan="8">
                   <NoResults>
-                    {searchTerm || activeCategory !== 'all' 
+                    {searchTerm || activeStatus !== 'all' 
                       ? '검색 결과가 없습니다.' 
-                      : '등록된 질문이 없습니다.'}
+                      : '등록된 견적문의가 없습니다.'}
                   </NoResults>
                 </td>
               </tr>
             )}
           </TableBody>
-        </QuestionsTable>
+        </EstimatesTable>
         
         {totalPages > 1 && (
           <Pagination>
@@ -681,103 +660,125 @@ const QuestionsManage = () => {
             </PageButton>
           </Pagination>
         )}
-        
-        <AddButton onClick={handleAddClick}>
-          + 새 질문 추가
-        </AddButton>
       </ContentSection>
       
-      {/* 질문 추가/수정/조회 모달 */}
-      {showModal && (
+      {/* 견적문의 상세/답변 모달 */}
+      {showModal && selectedEstimate && (
         <ModalOverlay onClick={handleCloseModal}>
           <ModalContainer onClick={(e) => e.stopPropagation()}>
             <ModalTitle>
-              {isEditing ? '질문 수정' : selectedQuestion ? '질문 상세' : '새 질문 추가'}
+              {modalType === MODAL_TYPES.VIEW ? '견적문의 상세' : '답변 작성'}
             </ModalTitle>
             
-            <form onSubmit={handleSubmit}>
-              <FormGroup>
-                <Label htmlFor="category">카테고리</Label>
-                <Select 
-                  id="category" 
-                  name="category" 
-                  value={formState.category} 
-                  onChange={handleInputChange}
-                  disabled={!isEditing && selectedQuestion}
-                >
-                  {categories.filter(c => c.id !== 'all').map(category => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </Select>
-              </FormGroup>
-              
-              <FormGroup>
-                <Label htmlFor="question">질문</Label>
-                <Input 
-                  type="text" 
-                  id="question" 
-                  name="question" 
-                  value={formState.question} 
-                  onChange={handleInputChange}
-                  readOnly={!isEditing && selectedQuestion}
-                  required
-                />
-              </FormGroup>
-              
-              <FormGroup>
-                <Label htmlFor="answer">답변</Label>
-                <TextArea 
-                  id="answer" 
-                  name="answer" 
-                  value={formState.answer} 
-                  onChange={handleInputChange}
-                  readOnly={!isEditing && selectedQuestion}
-                  required
-                />
-              </FormGroup>
-              
-              <ButtonGroup>
-                {isEditing || !selectedQuestion ? (
-                  <>
-                    <Button type="submit" primary>
-                      {isEditing ? '수정 완료' : '등록하기'}
-                    </Button>
-                    <Button type="button" onClick={handleCloseModal}>
-                      취소
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button type="button" primary onClick={() => {
-                      setIsEditing(true);
-                    }}>
-                      수정하기
-                    </Button>
-                    <Button type="button" danger onClick={() => {
-                      handleCloseModal();
-                      handleDeleteClick(selectedQuestion, { stopPropagation: () => {} });
-                    }}>
-                      삭제하기
-                    </Button>
-                    <Button type="button" onClick={handleCloseModal}>
-                      닫기
-                    </Button>
-                  </>
+            <EstimateDetailItem>
+              <EstimateDetailLabel>이름</EstimateDetailLabel>
+              <EstimateDetailValue>{selectedEstimate.name}</EstimateDetailValue>
+            </EstimateDetailItem>
+            
+            <EstimateDetailItem>
+              <EstimateDetailLabel>연락처</EstimateDetailLabel>
+              <EstimateDetailValue>{selectedEstimate.phone}</EstimateDetailValue>
+            </EstimateDetailItem>
+            
+            {selectedEstimate.email && (
+              <EstimateDetailItem>
+                <EstimateDetailLabel>이메일</EstimateDetailLabel>
+                <EstimateDetailValue>{selectedEstimate.email}</EstimateDetailValue>
+              </EstimateDetailItem>
+            )}
+            
+            <EstimateDetailItem>
+              <EstimateDetailLabel>서비스 종류</EstimateDetailLabel>
+              <EstimateDetailValue>{selectedEstimate.service}</EstimateDetailValue>
+            </EstimateDetailItem>
+            
+            <EstimateDetailItem>
+              <EstimateDetailLabel>설치 위치</EstimateDetailLabel>
+              <EstimateDetailValue>{selectedEstimate.location}</EstimateDetailValue>
+            </EstimateDetailItem>
+            
+            <EstimateDetailItem>
+              <EstimateDetailLabel>상세 내용</EstimateDetailLabel>
+              <EstimateDetailValue>{selectedEstimate.details}</EstimateDetailValue>
+            </EstimateDetailItem>
+            
+            <EstimateDetailItem>
+              <EstimateDetailLabel>접수일</EstimateDetailLabel>
+              <EstimateDetailValue>{formatDate(selectedEstimate.date)}</EstimateDetailValue>
+            </EstimateDetailItem>
+            
+            {modalType === MODAL_TYPES.VIEW ? (
+              <>
+                <EstimateDetailItem>
+                  <EstimateDetailLabel>상태</EstimateDetailLabel>
+                  <EstimateDetailValue>
+                    <StatusBadge status={selectedEstimate.status}>
+                      {selectedEstimate.status}
+                    </StatusBadge>
+                  </EstimateDetailValue>
+                </EstimateDetailItem>
+                
+                {selectedEstimate.reply && (
+                  <EstimateDetailItem>
+                    <EstimateDetailLabel>답변</EstimateDetailLabel>
+                    <EstimateDetailValue>{selectedEstimate.reply}</EstimateDetailValue>
+                  </EstimateDetailItem>
                 )}
-              </ButtonGroup>
-            </form>
+                
+                <ButtonGroup>
+                  <Button primary onClick={() => setModalType(MODAL_TYPES.REPLY)}>
+                    답변 작성
+                  </Button>
+                  <Button onClick={handleCloseModal}>
+                    닫기
+                  </Button>
+                </ButtonGroup>
+              </>
+            ) : (
+              <>
+                <FormGroup>
+                  <Label htmlFor="status">상태</Label>
+                  <Select 
+                    id="status" 
+                    value={replyStatus} 
+                    onChange={(e) => setReplyStatus(e.target.value)}
+                  >
+                    <option value="대기중">대기중</option>
+                    <option value="처리중">처리중</option>
+                    <option value="완료">완료</option>
+                  </Select>
+                </FormGroup>
+                
+                <FormGroup>
+                  <Label htmlFor="reply">답변 내용</Label>
+                  <TextArea 
+                    id="reply" 
+                    value={replyContent} 
+                    onChange={(e) => setReplyContent(e.target.value)} 
+                    placeholder="고객에게 전달할 답변을 작성하세요"
+                  />
+                </FormGroup>
+                
+                <ButtonGroup>
+                  <Button primary onClick={saveReply}>
+                    저장
+                  </Button>
+                  <Button onClick={handleCloseModal}>
+                    취소
+                  </Button>
+                </ButtonGroup>
+              </>
+            )}
           </ModalContainer>
         </ModalOverlay>
       )}
       
       {/* 삭제 확인 모달 */}
-      {showConfirmModal && modalType === 'DELETE' && (
+      {showConfirmModal && (
         <ConfirmModal>
           <ConfirmContent>
             <ConfirmText>
-              이 게시물을 삭제 하시겠습니까? 삭제 후 다시 볼 수 없습니다.
+              정말 이 견적문의를 삭제하시겠습니까?
             </ConfirmText>
             <ButtonGroup style={{ justifyContent: 'center' }}>
               <Button danger onClick={confirmDelete}>삭제</Button>
@@ -786,19 +787,8 @@ const QuestionsManage = () => {
           </ConfirmContent>
         </ConfirmModal>
       )}
-
-      {/* 삭제 완료 모달 */}
-      {modalType === 'DELETE_COMPLETE' && (
-        <ConfirmModal>
-          <ConfirmContent>
-            <ConfirmText>
-              게시물이 삭제되었습니다.
-            </ConfirmText>
-          </ConfirmContent>
-        </ConfirmModal>
-      )}
     </Container>
   );
 };
 
-export default QuestionsManage; 
+export default EstimateManage; 

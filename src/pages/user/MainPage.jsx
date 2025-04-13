@@ -83,13 +83,19 @@ const WelcomeText = styled.p`
   font-family: 'Jalnan', sans-serif !important;
 `;
 
-const ToolBox = styled.div`
+const ToolBox = styled.section`
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
-  width: 100%;
-  gap: 30px;
-  margin-top: 40px;
+  gap: 20px;
+  margin: 40px auto;
+  max-width: 1200px;
+  padding: 0 20px;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: center;
+  }
 `;
 
 const ToolItem = styled.div`
@@ -111,51 +117,55 @@ const LinkToolItem = styled(Link)`
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 30%;
-  max-width: 280px;
-  height: 200px;
-  padding: 20px;
-  margin: 10px;
-  border: 2px dashed ${props => props.color || '#FFD6E0'};
-  border-radius: 20px;
-  background-color: ${props => props.color || '#FFD6E0'}20;
+  min-width: 180px;
+  text-align: center;
+  padding: 1.5rem;
   text-decoration: none;
-  color: #333;
+  border: 2px dashed #aaa;
+  border-radius: 15px;
+  background-color: ${props => props.color || '#fff'};
   transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
   font-family: 'Gaegu', cursive;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  
+
   &:hover {
-    transform: scale(1.05) rotate(2deg);
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
-    animation: sparkle 1.5s infinite;
+    transform: scale(1.05) rotate(1deg);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+
+    &::after {
+      content: '✨';
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      font-size: 1.5rem;
+      animation: sparkle 1s infinite;
+    }
   }
-  
+
   @keyframes sparkle {
-    0% { box-shadow: 0 0 5px rgba(255, 255, 255, 0.5); }
-    50% { box-shadow: 0 0 20px rgba(255, 255, 255, 0.8); }
-    100% { box-shadow: 0 0 5px rgba(255, 255, 255, 0.5); }
+    0% { opacity: 0; transform: translateY(0) scale(0.8); }
+    50% { opacity: 1; transform: translateY(-5px) scale(1); }
+    100% { opacity: 0; transform: translateY(-10px) scale(0.8); }
   }
 `;
 
 const ToolIcon = styled.div`
-  font-size: 36px;
-  color: #2A8191;
-  margin-bottom: 15px;
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
 `;
 
 const ToolTitle = styled.h3`
-  font-size: 22px;
-  margin: 10px 0;
+  margin: 0.5rem 0;
+  font-size: 1.4rem;
   color: #333;
   font-family: 'Gaegu', cursive;
-  font-weight: bold;
 `;
 
 const ToolDescription = styled.p`
-  font-size: 14px;
-  text-align: center;
-  line-height: 1.4;
+  margin: 0;
+  font-size: 0.9rem;
+  color: #555;
   font-family: 'Gaegu', cursive;
 `;
 
@@ -272,30 +282,21 @@ const MainPage = () => {
         
         <ToolBox>
           <LinkToolItem to="/installation" color="#FFD6E0">
-            <ToolIcon>🏠</ToolIcon>
+            <ToolIcon>🔧</ToolIcon>
             <ToolTitle>설치시공</ToolTitle>
-            <ToolDescription>
-              전문 기술자들이 정확한 시공과 품질관리로<br />
-              고객님의 만족을 최우선으로 생각합니다.
-            </ToolDescription>
+            <ToolDescription>닥트 및 기구 설치 서비스</ToolDescription>
           </LinkToolItem>
           
-          <LinkToolItem to="/questions" color="#D6E0FF">
+          <LinkToolItem to="/questions" color="#D4F0F0">
             <ToolIcon>❓</ToolIcon>
             <ToolTitle>질문사항</ToolTitle>
-            <ToolDescription>
-              자주 묻는 질문과 답변을<br />
-              확인하실 수 있습니다.
-            </ToolDescription>
+            <ToolDescription>자주 묻는 질문과 답변</ToolDescription>
           </LinkToolItem>
           
-          <LinkToolItem to="/estimate" color="#D6FFE0">
-            <ToolIcon>💰</ToolIcon>
+          <LinkToolItem to="/estimate" color="#E2F0CB">
+            <ToolIcon>📝</ToolIcon>
             <ToolTitle>견적문의</ToolTitle>
-            <ToolDescription>
-              정확한 견적과 신속한 답변으로<br />
-              고객님의 문의에 답변드립니다.
-            </ToolDescription>
+            <ToolDescription>프로젝트 견적 문의하기</ToolDescription>
           </LinkToolItem>
         </ToolBox>
       </ContentBox>

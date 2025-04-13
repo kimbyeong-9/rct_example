@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from '../layouts/MainLayout';
 import MainPage from '../pages/user/MainPage';
 import Installation from '../pages/user/Installation';
@@ -14,6 +14,15 @@ import InstallationManage from '../pages/admin/InstallationManage';
 import NoticeManage from '../pages/admin/NoticeManage';
 import QuestionsManage from '../pages/admin/QuestionsManage';
 import AdminLogin from '../pages/admin/AdminLogin';
+import CredentialsReset from '../pages/admin/CredentialsReset';
+import EmailVerification from '../pages/admin/EmailVerification';
+import EstimateManage from "../pages/admin/EstimateManage";
+
+// 관리자 인증 확인용 PrivateRoute 컴포넌트
+const PrivateRoute = ({ element }) => {
+  const isAuthenticated = sessionStorage.getItem('isAdminLoggedIn') === 'true';
+  return isAuthenticated ? element : <Navigate to="/admin/login" replace />;
+};
 
 const AppRouter = () => {
   return (
@@ -28,12 +37,18 @@ const AppRouter = () => {
           <Route path="questions" element={<Questions />} />
           <Route path="notice" element={<Notice />} />
           <Route path="estimate" element={<Estimate />} />
-          <Route path="admin" element={<AdminPage />} />
-          <Route path="admin/installation" element={<InstallationManage />} />
-          <Route path="admin/notice" element={<NoticeManage />} />
-          <Route path="admin/questions" element={<QuestionsManage />} />
+          
+          {/* 관리자 페이지 라우트는 PrivateRoute를 통해 인증 체크 */}
+          <Route path="admin" element={<PrivateRoute element={<AdminPage />} />} />
+          <Route path="admin/installation" element={<PrivateRoute element={<InstallationManage />} />} />
+          <Route path="admin/notice" element={<PrivateRoute element={<NoticeManage />} />} />
+          <Route path="admin/questions" element={<PrivateRoute element={<QuestionsManage />} />} />
+          <Route path="admin/EstimateManage" element={<PrivateRoute element={<EstimateManage />} />} />
         </Route>
         <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin/reset-credentials" element={<CredentialsReset />} />
+        <Route path="/admin/direct-password-change" element={<CredentialsReset />} />
+        <Route path="/admin/verify-email" element={<EmailVerification />} />
       </Routes>
     </BrowserRouter>
   );

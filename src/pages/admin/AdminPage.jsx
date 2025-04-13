@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import styled from 'styled-components';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 const Container = styled.div`
   padding: 40px 20px;
@@ -77,11 +77,34 @@ const BackButton = styled(Link)`
   }
 `;
 
+const LogoutButton = styled.button`
+  background-color: #f44336;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.3s;
+
+  &:hover {
+    background-color: #d32f2f;
+  }
+`;
+
 const AdminPage = () => {
+  const navigate = useNavigate();
+
   // 페이지 진입 시 스크롤 위치를 상단으로 초기화
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
+
+  const handleLogout = () => {
+    // 로그아웃 처리
+    sessionStorage.removeItem('isAdminLoggedIn');
+    navigate('/admin/login');
+  };
 
   return (
     <Container>
@@ -112,7 +135,7 @@ const AdminPage = () => {
             </CardDescription>
           </AdminCard>
           
-          <AdminCard to="/admin/estimate">
+          <AdminCard to="/admin/EstimateManage">
             <CardTitle>견적문의 관리</CardTitle>
             <CardDescription>
               고객들의 견적 문의를 확인하고
@@ -120,7 +143,7 @@ const AdminPage = () => {
             </CardDescription>
           </AdminCard>
         </AdminSection>
-        <BackButton to="/">메인으로 돌아가기</BackButton>
+        <LogoutButton onClick={handleLogout}>로그아웃</LogoutButton>
       </ContentBox>
     </Container>
   );

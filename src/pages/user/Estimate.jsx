@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
+import useEstimates from '../../services/EstimateService';
 
 const Container = styled.div`
   padding: 120px 20px 80px;
@@ -117,7 +118,66 @@ const SubmitButton = styled.button`
   }
 `;
 
+// 모달 관련 스타일 컴포넌트
+const ModalOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+`;
+
+const ModalContainer = styled.div`
+  background-color: white;
+  padding: 30px;
+  border-radius: 8px;
+  width: 400px;
+  max-width: 90%;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  text-align: center;
+`;
+
+const ModalTitle = styled.h3`
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #333;
+  font-size: 18px;
+`;
+
+const ModalButtonContainer = styled.div`
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-top: 20px;
+`;
+
+const ModalButton = styled.button`
+  padding: 10px 20px;
+  border-radius: 4px;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  background-color: ${props => props.primary ? '#2A8191' : '#e9ecef'};
+  color: ${props => props.primary ? 'white' : '#333'};
+  
+  &:hover {
+    background-color: ${props => props.primary ? '#236d7a' : '#dee2e6'};
+  }
+`;
+
+// 모달 타입 상수
+const MODAL_TYPES = {
+  CONFIRM: 'confirm',
+  COMPLETE: 'complete'
+};
+
 const Estimate = () => {
+  const { addEstimate } = useEstimates();
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -128,6 +188,8 @@ const Estimate = () => {
   });
   
   const [submitted, setSubmitted] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [modalType, setModalType] = useState(null);
   
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -137,11 +199,18 @@ const Estimate = () => {
     }));
   };
   
-  const handleSubmit = (e) => {
+  const openConfirmModal = (e) => {
     e.preventDefault();
-    // 여기에 폼 제출 로직을 추가할 수 있습니다.
-    console.log('Form submitted:', formData);
-    setSubmitted(true);
+    setModalType(MODAL_TYPES.CONFIRM);
+    setShowModal(true);
+  };
+  
+  const handleSubmit = () => {
+    // 견적문의 서비스를 통해 데이터 저장
+    addEstimate(formData);
+    
+    // 확인 모달 닫고 완료 모달 표시
+    setModalType(MODAL_TYPES.COMPLETE);
     
     // 폼 초기화
     setFormData({
@@ -153,10 +222,44 @@ const Estimate = () => {
       details: ''
     });
     
-    // 3초 후 메시지 숨기기
+    // 3초 후 완료 모달 닫기
     setTimeout(() => {
-      setSubmitted(false);
+      setShowModal(false);
+      setSubmitted(true);
+      
+      // 추가로 3초 후 완료 메시지도 숨기기
+      setTimeout(() => {
+        setSubmitted(false);
+      }, 3000);
     }, 3000);
+  };
+  
+  const closeModal = () => {
+    setShowModal(false);
+  };
+  
+  // 모달 내용 렌더링 함수
+  const renderModalContent = () => {
+    switch (modalType) {
+      case MODAL_TYPES.CONFIRM:
+        return (
+          <>
+            <ModalTitle>견적문의 하시겠습니까?</ModalTitle>
+            <ModalButtonContainer>
+              <ModalButton primary onClick={handleSubmit}>확인</ModalButton>
+              <ModalButton onClick={closeModal}>취소</ModalButton>
+            </ModalButtonContainer>
+          </>
+        );
+      case MODAL_TYPES.COMPLETE:
+        return (
+          <>
+            <ModalTitle>견적문의가 완료되었습니다</ModalTitle>
+          </>
+        );
+      default:
+        return null;
+    }
   };
   
   // 페이지 진입 시 스크롤 위치를 상단으로 초기화
@@ -183,7 +286,7 @@ const Estimate = () => {
           </div>
         )}
         
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={openConfirmModal}>
           <FormGroup>
             <Label htmlFor="name">이름 *</Label>
             <Input 
@@ -272,6 +375,15 @@ const Estimate = () => {
           </ButtonContainer>
         </form>
       </ContentBox>
+      
+      {/* 모달 */}
+      {showModal && (
+        <ModalOverlay onClick={modalType !== MODAL_TYPES.COMPLETE ? closeModal : null}>
+          <ModalContainer onClick={(e) => e.stopPropagation()}>
+            {renderModalContent()}
+          </ModalContainer>
+        </ModalOverlay>
+      )}
     </Container>
   );
 };

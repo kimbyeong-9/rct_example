@@ -387,6 +387,10 @@ const InstallationManage = () => {
   const [editPostImages, setEditPostImages] = useState([]);
   const contentRef = useRef(null);
   
+  // 검색 기능을 위한 상태 추가
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState(null);
+  
   // 모달 관련 상태
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState(null);
@@ -402,6 +406,15 @@ const InstallationManage = () => {
   useEffect(() => {
     setLocalCategories(categories);
   }, [categories]);
+
+  // 검색어가 변경될 때마다 검색 결과 업데이트
+  useEffect(() => {
+    if (searchTerm.trim()) {
+      performSearch();
+    } else {
+      setSearchResults(null);
+    }
+  }, [searchTerm, localCategories]);
 
   // 다른 곳을 클릭했을 때 열린 카테고리 닫기
   useEffect(() => {
@@ -428,6 +441,39 @@ const InstallationManage = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [localCategories]);
+
+  // 검색 기능 구현
+  const performSearch = () => {
+    if (!searchTerm.trim()) {
+      setSearchResults(null);
+      return;
+    }
+
+    const results = [];
+    const term = searchTerm.toLowerCase();
+
+    localCategories.forEach((category, categoryIndex) => {
+      const matchingPosts = category.posts.filter(post => 
+        post.title.toLowerCase().includes(term) || post.content.toLowerCase().includes(term)
+      );
+
+      if (matchingPosts.length > 0) {
+        results.push({
+          category,
+          categoryIndex,
+          posts: matchingPosts
+        });
+      }
+    });
+
+    setSearchResults(results.length > 0 ? results : []);
+  };
+
+  // 검색 핸들러
+  const handleSearch = (e) => {
+    e.preventDefault();
+    performSearch();
+  };
 
   const toggleExpand = (index, event) => {
     // 버튼 클릭 시에는 토글하지 않음
@@ -467,10 +513,19 @@ const InstallationManage = () => {
     const category = localCategories[categoryIndex];
     const post = category.posts.find(p => p.id === postId);
     
+    if (!post) {
+      console.error(`Post with ID ${postId} not found in category ${category.name}`);
+      return;
+    }
+    
+    // 제목이 '새 게시물'이거나 내용이 '내용을 입력하세요.'인 경우 입력 시작 시 지워지도록 빈 값으로 설정
+    const initialTitle = post.title === '새 게시물' ? '' : post.title;
+    const initialContent = post.content === '내용을 입력하세요.' ? '' : post.content;
+    
     setEditCategoryId(category.id);
     setEditPostId(postId);
-    setEditPostTitle(post.title);
-    setEditPostContent(post.content);
+    setEditPostTitle(initialTitle);
+    setEditPostContent(initialContent);
     setEditPostImages(post.images || []);
     setEditMode(true);
   };
@@ -501,7 +556,18 @@ const InstallationManage = () => {
 
   const saveEdit = async () => {
     const categoryIndex = pendingSaveIndex;
+    
+    if (categoryIndex === null || categoryIndex === undefined) {
+      console.error('Invalid category index for saving', categoryIndex);
+      return;
+    }
+    
     const category = localCategories[categoryIndex];
+    
+    if (!category) {
+      console.error('Category not found for index', categoryIndex);
+      return;
+    }
     
     // 이미지 처리: File 객체를 Base64 문자열로 변환
     const processedImages = await Promise.all(
@@ -521,17 +587,31 @@ const InstallationManage = () => {
       images: processedImages
     });
     
-    // 상태 초기화
+    // 상태 초기화 (카테고리는 계속 열린 상태로 유지)
     setEditMode(false);
     setEditPostId(null);
     setEditCategoryId(null);
     setShowModal(false);
     setPendingSaveIndex(null);
+    
+    // 카테고리가 열린 상태로 유지되도록 함
+    keepCategoryOpen(categoryIndex);
   };
 
   const executeDelete = () => {
     const { categoryIndex, postId } = pendingDeleteInfo;
+    
+    if (categoryIndex === null || categoryIndex === undefined) {
+      console.error('Invalid category index for deletion', categoryIndex);
+      return;
+    }
+    
     const category = localCategories[categoryIndex];
+    
+    if (!category) {
+      console.error('Category not found for index', categoryIndex);
+      return;
+    }
     
     // 게시물 삭제 실행
     deletePost(category.id, postId);
@@ -539,27 +619,62 @@ const InstallationManage = () => {
     // 삭제 확인 모달에서 삭제 완료 모달로 변경
     setModalType(MODAL_TYPES.DELETE_COMPLETE);
     
-    // 5초 뒤에 모달 자동 닫기
+    // 카테고리가 열린 상태로 유지되도록 함
+    keepCategoryOpen(categoryIndex);
+    
+    // 2초 뒤에 모달 자동 닫기
     setTimeout(() => {
       setShowModal(false);
       setPendingDeleteInfo(null);
+      
+      // 모달이 닫힌 후에도 카테고리가 열린 상태 유지
+      keepCategoryOpen(categoryIndex);
     }, 2000);
   };
 
   const cancelEdit = (event) => {
     if (event) event.stopPropagation();
+    
+    // 현재 편집 중인 카테고리 인덱스 저장
+    let categoryIndex = -1;
+    if (editCategoryId) {
+      categoryIndex = localCategories.findIndex(cat => cat.id === editCategoryId);
+    } else if (pendingSaveIndex !== null) {
+      categoryIndex = pendingSaveIndex;
+    } else if (pendingDeleteInfo) {
+      categoryIndex = pendingDeleteInfo.categoryIndex;
+    }
+    
     setEditMode(false);
     setEditPostId(null);
     setEditCategoryId(null);
     setEditPostImages([]);
     setShowModal(false);
     setPendingSaveIndex(null);
+    
+    // 카테고리 인덱스가 유효하면 열린 상태 유지
+    if (categoryIndex >= 0) {
+      keepCategoryOpen(categoryIndex);
+    }
   };
 
   const closeModal = () => {
+    // 현재 작업 중인 카테고리 인덱스 저장
+    let categoryIndex = -1;
+    if (pendingSaveIndex !== null) {
+      categoryIndex = pendingSaveIndex;
+    } else if (pendingDeleteInfo) {
+      categoryIndex = pendingDeleteInfo.categoryIndex;
+    }
+    
     setShowModal(false);
     setPendingSaveIndex(null);
     setPendingDeleteInfo(null);
+    
+    // 카테고리 인덱스가 유효하면 열린 상태 유지
+    if (categoryIndex >= 0) {
+      keepCategoryOpen(categoryIndex);
+    }
   };
 
   const addNewPost = (categoryIndex, event) => {
@@ -571,12 +686,30 @@ const InstallationManage = () => {
     
     const category = localCategories[categoryIndex];
     
+    if (!category) {
+      console.error('Category not found for index', categoryIndex);
+      return;
+    }
+    
+    // 이미 '새 게시물'이라는 제목의 게시물이 있는지 확인
+    const existingNewPost = category.posts.find(p => p.title === '새 게시물');
+    
+    // 새 게시물이 이미 있다면 추가하지 않음
+    if (existingNewPost) {
+      // 이미 있는 게시물의 편집 모드 시작
+      startEditing(categoryIndex, existingNewPost.id, event);
+      return;
+    }
+    
     // 게시물 추가
     addPost(category.id, {
       title: '새 게시물',
       content: '내용을 입력하세요.',
       images: []
     });
+    
+    // 카테고리가 열린 상태로 유지되도록 함
+    keepCategoryOpen(categoryIndex);
   };
 
   const handleImageUpload = (event) => {
@@ -642,7 +775,11 @@ const InstallationManage = () => {
 
   // 특정 카테고리를 열린 상태로 유지하는 함수
   const keepCategoryOpen = (index) => {
-    console.log('keepCategoryOpen called for index:', index);
+    if (index === null || index === undefined || index < 0 || index >= localCategories.length) {
+      console.error('Invalid category index for keeping open', index);
+      return;
+    }
+    
     const newCategories = [...localCategories];
     
     // 모든 카테고리 닫기
@@ -659,125 +796,187 @@ const InstallationManage = () => {
     setLocalCategories(newCategories);
   };
 
+  const renderCategoryContent = () => {
+    // 검색 결과가 있으면 검색 결과만 표시
+    if (searchResults && searchResults.length > 0) {
+      return (
+        <>
+          <SearchResultsHeader>
+            <SearchResultsTitle>검색 결과: {searchTerm}</SearchResultsTitle>
+            <ActionButton onClick={() => setSearchTerm('')}>검색 초기화</ActionButton>
+          </SearchResultsHeader>
+          {searchResults.map(result => (
+            <CategoryWrapper key={result.category.id}>
+              <CategoryItem onClick={(e) => toggleExpand(result.categoryIndex, e)}>
+                {result.category.name}
+                <ExpandButton>
+                  {result.category.expanded ? '▲' : '▼'}
+                </ExpandButton>
+              </CategoryItem>
+              
+              <ExpandedContent expanded={true}>
+                <PostList>
+                  {result.posts.map((post) => (
+                    <PostItem key={post.id} onClick={(e) => e.stopPropagation()}>
+                      <PostTitle>{post.title}</PostTitle>
+                      <PostActions>
+                        <ActionButton color="#4A90A7" onClick={(e) => startEditing(result.categoryIndex, post.id, e)}>수정</ActionButton>
+                        <ActionButton color="#dc3545" onClick={(e) => confirmDelete(result.categoryIndex, post.id, e)}>삭제</ActionButton>
+                      </PostActions>
+                    </PostItem>
+                  ))}
+                </PostList>
+                
+                <AddPostButton onClick={(e) => addNewPost(result.categoryIndex, e)}>
+                  + 새 게시물 추가
+                </AddPostButton>
+              </ExpandedContent>
+            </CategoryWrapper>
+          ))}
+        </>
+      );
+    } else if (searchResults && searchResults.length === 0) {
+      return (
+        <NoResultsMessage>
+          <p>검색 결과가 없습니다.</p>
+          <ActionButton onClick={() => setSearchTerm('')}>검색 초기화</ActionButton>
+        </NoResultsMessage>
+      );
+    }
+    
+    // 일반 카테고리 목록 표시
+    return (
+      <CategoryList>
+        {localCategories.map((category, index) => (
+          <React.Fragment key={index}>
+            <CategoryItem onClick={(e) => toggleExpand(index, e)}>
+              {category.name}
+              <ExpandButton 
+                className="expand-button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // 토글 확장 로직 직접 구현
+                  const newCategories = [...localCategories];
+                  
+                  // 다른 카테고리들 닫기
+                  newCategories.forEach((cat, idx) => {
+                    if (idx !== index) {
+                      newCategories[idx].expanded = false;
+                    }
+                  });
+                  
+                  // 현재 카테고리 토글
+                  newCategories[index].expanded = !newCategories[index].expanded;
+                  setLocalCategories(newCategories);
+                }}
+              >
+                {category.expanded ? '▲' : '▼'}
+              </ExpandButton>
+            </CategoryItem>
+            
+            <ExpandedContent expanded={category.expanded} isLast={index === localCategories.length - 1 && category.expanded}>
+              <PostList>
+                {category.posts.map((post) => (
+                  <PostItem key={post.id} onClick={(e) => e.stopPropagation()}>
+                    {editMode && editPostId === post.id ? (
+                      <>
+                        <PostInput 
+                          value={editPostTitle} 
+                          onChange={(e) => setEditPostTitle(e.target.value)} 
+                          placeholder="제목을 입력하세요"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <PostActions>
+                          <ActionButton color="#28a745" onClick={(e) => confirmSave(index, e)}>저장</ActionButton>
+                          <ActionButton color="#dc3545" onClick={(e) => cancelEdit(e)}>취소</ActionButton>
+                        </PostActions>
+                      </>
+                    ) : (
+                      <>
+                        <PostTitle>{post.title}</PostTitle>
+                        <PostActions>
+                          <ActionButton color="#4A90A7" onClick={(e) => startEditing(index, post.id, e)}>수정</ActionButton>
+                          <ActionButton color="#dc3545" onClick={(e) => confirmDelete(index, post.id, e)}>삭제</ActionButton>
+                        </PostActions>
+                      </>
+                    )}
+                  </PostItem>
+                ))}
+                
+                {editMode && editPostId !== null && 
+                  localCategories[index].posts.some(p => p.id === editPostId) && (
+                    <>
+                      <PostTextArea 
+                        value={editPostContent} 
+                        onChange={(e) => setEditPostContent(e.target.value)} 
+                        placeholder="내용을 입력하세요"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      
+                      <ImageUploadSection onClick={(e) => e.stopPropagation()}>
+                        <ImageUploadLabel>
+                          이미지 첨부
+                          <ImageUploadInput 
+                            type="file" 
+                            accept="image/*" 
+                            multiple 
+                            onChange={handleImageUpload}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </ImageUploadLabel>
+                        <span>이미지는 여러개 선택 가능합니다</span>
+                        
+                        {editPostImages.length > 0 ? (
+                          <ImagePreviewContainer>
+                            {editPostImages.map(image => (
+                              <ImagePreview key={image.id}>
+                                <PreviewImage src={image.url || image.base64} alt={image.name} />
+                                <RemoveImageButton onClick={(e) => removeImage(image.id, e)}>×</RemoveImageButton>
+                              </ImagePreview>
+                            ))}
+                          </ImagePreviewContainer>
+                        ) : (
+                          <NoPreviousImages>첨부된 이미지가 없습니다.</NoPreviousImages>
+                        )}
+                      </ImageUploadSection>
+                    </>
+                  )
+                }
+              </PostList>
+              
+              <AddPostButton onClick={(e) => addNewPost(index, e)}>
+                + 새 게시물 추가
+              </AddPostButton>
+            </ExpandedContent>
+          </React.Fragment>
+        ))}
+      </CategoryList>
+    );
+  };
+
   return (
     <Container>
-      <PageTitle>관리자 페이지</PageTitle>
+      <PageTitle>설치시공 관리 페이지</PageTitle>
       
       <Header>
         <SearchSection>
-          <SearchInput type="text" placeholder="검색어를 입력하세요" />
-          <SearchButton>검색</SearchButton>
+          <SearchInput 
+            type="text" 
+            placeholder="검색어를 입력하세요" 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleSearch(e)}
+          />
+          <SearchButton onClick={handleSearch}>검색</SearchButton>
         </SearchSection>
         <BackButton to="/admin">이전</BackButton>
       </Header>
 
       <ContentSection ref={contentRef}>
-        <CategoryList>
-          {localCategories.map((category, index) => (
-            <React.Fragment key={index}>
-              <CategoryItem onClick={(e) => toggleExpand(index, e)}>
-                {category.name}
-                <ExpandButton 
-                  className="expand-button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // 토글 확장 로직 직접 구현
-                    const newCategories = [...localCategories];
-                    
-                    // 다른 카테고리들 닫기
-                    newCategories.forEach((cat, idx) => {
-                      if (idx !== index) {
-                        newCategories[idx].expanded = false;
-                      }
-                    });
-                    
-                    // 현재 카테고리 토글
-                    newCategories[index].expanded = !newCategories[index].expanded;
-                    setLocalCategories(newCategories);
-                  }}
-                >
-                  {category.expanded ? '▲' : '▼'}
-                </ExpandButton>
-              </CategoryItem>
-              
-              <ExpandedContent expanded={category.expanded} isLast={index === localCategories.length - 1 && category.expanded}>
-                <PostList>
-                  {category.posts.map((post) => (
-                    <PostItem key={post.id} onClick={(e) => e.stopPropagation()}>
-                      {editMode && editPostId === post.id ? (
-                        <>
-                          <PostInput 
-                            value={editPostTitle} 
-                            onChange={(e) => setEditPostTitle(e.target.value)} 
-                            placeholder="제목"
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                          <PostActions>
-                            <ActionButton color="#28a745" onClick={(e) => confirmSave(index, e)}>저장</ActionButton>
-                            <ActionButton color="#dc3545" onClick={(e) => cancelEdit(e)}>취소</ActionButton>
-                          </PostActions>
-                        </>
-                      ) : (
-                        <>
-                          <PostTitle>{post.title}</PostTitle>
-                          <PostActions>
-                            <ActionButton color="#4A90A7" onClick={(e) => startEditing(index, post.id, e)}>수정</ActionButton>
-                            <ActionButton color="#dc3545" onClick={(e) => confirmDelete(index, post.id, e)}>삭제</ActionButton>
-                          </PostActions>
-                        </>
-                      )}
-                    </PostItem>
-                  ))}
-                  
-                  {editMode && editPostId !== null && 
-                    localCategories[index].posts.some(p => p.id === editPostId) && (
-                      <>
-                        <PostTextArea 
-                          value={editPostContent} 
-                          onChange={(e) => setEditPostContent(e.target.value)} 
-                          placeholder="내용을 입력하세요"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                        
-                        <ImageUploadSection onClick={(e) => e.stopPropagation()}>
-                          <ImageUploadLabel>
-                            이미지 첨부
-                            <ImageUploadInput 
-                              type="file" 
-                              accept="image/*" 
-                              multiple 
-                              onChange={handleImageUpload}
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                          </ImageUploadLabel>
-                          <span>이미지는 여러개 선택 가능합니다</span>
-                          
-                          {editPostImages.length > 0 ? (
-                            <ImagePreviewContainer>
-                              {editPostImages.map(image => (
-                                <ImagePreview key={image.id}>
-                                  <PreviewImage src={image.url || image.base64} alt={image.name} />
-                                  <RemoveImageButton onClick={(e) => removeImage(image.id, e)}>×</RemoveImageButton>
-                                </ImagePreview>
-                              ))}
-                            </ImagePreviewContainer>
-                          ) : (
-                            <NoPreviousImages>첨부된 이미지가 없습니다.</NoPreviousImages>
-                          )}
-                        </ImageUploadSection>
-                      </>
-                    )
-                  }
-                </PostList>
-                
-                <AddPostButton onClick={(e) => addNewPost(index, e)}>
-                  + 새 게시물 추가
-                </AddPostButton>
-              </ExpandedContent>
-            </React.Fragment>
-          ))}
-        </CategoryList>
+        {renderCategoryContent()}
       </ContentSection>
+
+      <FrontPageLink to="/installation">사용자 페이지 보기</FrontPageLink>
 
       {/* 모달 */}
       {showModal && (
@@ -790,6 +989,56 @@ const InstallationManage = () => {
     </Container>
   );
 };
+
+// 검색 결과 관련 스타일
+const SearchResultsHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: white;
+  padding: 15px;
+  border-radius: 10px;
+  margin-bottom: 15px;
+`;
+
+const SearchResultsTitle = styled.h2`
+  font-size: 18px;
+  color: #333;
+  margin: 0;
+`;
+
+const NoResultsMessage = styled.div`
+  background-color: white;
+  padding: 30px;
+  text-align: center;
+  border-radius: 10px;
+  
+  p {
+    font-size: 16px;
+    margin-bottom: 15px;
+    color: #666;
+  }
+`;
+
+const CategoryWrapper = styled.div`
+  margin-bottom: 15px;
+`;
+
+// 사용자 페이지 링크 스타일
+const FrontPageLink = styled(Link)`
+  display: block;
+  text-align: center;
+  margin-top: 20px;
+  padding: 10px;
+  background-color: #4A90A7;
+  color: white;
+  text-decoration: none;
+  border-radius: 5px;
+  
+  &:hover {
+    background-color: #357A8F;
+  }
+`;
 
 // 모달 텍스트 스타일 추가
 const ModalText = styled.p`
